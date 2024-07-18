@@ -1,25 +1,39 @@
 #!/bin/bash
 
 # Путь к файлу, который отслеживает количество запусков
-count_file="script_run_count.txt"
-log_file="COMMITS.md"
+count_file="run_count.txt"
+run_log="run.log"
+error_log="error.log"
 
-# Проверяем, существует ли файл для отслеживания количества запусков
-if [ ! -f $count_file ]; then
-    echo 0 > $count_file
+# Проверка наличия git
+if ! command -v git &> /dev/null; then
+    echo "Git is not installed or not in PATH. Aborting." >> "$error_log" 2>&1
+    exit 1
 fi
 
-# Проверяем, существует ли файл логов
-if [ ! -f $log_file ]; then
-    touch $log_file
+# Проверяем, существует ли файл для отслеживания количества запусков
+if [ ! -f "$count_file" ]; then
+    echo 0 > "$count_file" || { echo "Failed to create $count_file. Aborting." >> "$error_log" 2>&1; exit 1; }
+fi
+
+# Проверяем, существует ли файл для лога запусков
+if [ ! -f "$run_log" ]; then
+    touch "$run_log" || { echo "Failed to create $run_log. Aborting." >> "$error_log" 2>&1; exit 1; }
+fi
+
+# Проверяем, существует ли файл для лога ошибок
+if [ ! -f "$error_log" ]; then
+    touch "$error_log" || { echo "Failed to create $error_log. Aborting." >> "$run_log" 2>&1; exit 1; }
 fi
 
 # Читаем текущее количество запусков
-run_count=$(cat $count_file)
+run_count=$(cat "$count_file")
+
+# Увеличиваем количество запусков на 1
 run_count=$((run_count + 1))
 
-# Обновляем количество запусков
-echo $run_count > $count_file
+# Обновляем количество запусков в файле
+echo "$run_count" > "$count_file"
 
 # Функция для генерации случайных изменений и коммитов
 perform_random_commits() {
@@ -46,8 +60,8 @@ perform_random_commits() {
         random_file=${files[$RANDOM % ${#files[@]}]}
 
         # Если файл не существует, создаем его
-        if [ ! -f $random_file ]; then
-            touch $random_file
+        if [ ! -f "$random_file" ]; then
+            touch "$random_file" || { echo "Failed to create $random_file. Aborting." >> "$error_log" 2>&1; exit 1; }
         fi
 
         # Создаем массив со случайными строками кода
@@ -58,7 +72,7 @@ perform_random_commits() {
             "def read_file(file_path):\n    try:\n        with open(file_path, 'r') as file:\n            return file.read()\n    except FileNotFoundError:\n        return 'File not found'"
             "def current_time():\n    from datetime import datetime\n    now = datetime.now()\n    return now.strftime('%Y-%m-%d %H:%M:%S')"
             "def fibonacci(n):\n    a, b = 0, 1\n    for _ in range(n):\n        a, b = b, a + b\n    return a"
-            "def factorial(n):\n    if n == 0:\n        return 1\n    else:\n        return n * factorial(n-1)"
+            "def factorial(n):\n    if n == 0\n        return 1\n    else\n        return n * factorial(n-1)"
             "def reverse_string(s):\n    return s[::-1]"
             "def is_prime(n):\n    if n <= 1\n        return False\n    for i in range(2, int(n**0.5) + 1)\n        if n % i == 0\n            return False\n    return True"
             "def count_words(text):\n    words = text.split()\n    return len(words)"
@@ -89,25 +103,37 @@ perform_random_commits() {
         echo -e "$random_code\n" >> "$random_file"
 
         # Добавляем изменения в индекс Git
-        git add .
+        if ! git add "$random_file" >> "$error_log" 2>&1; then
+            echo "Failed to add $random_file to git index. See $error_log for details." >> "$error_log" 2>&1
+            exit 1
+        fi
 
         # Коммитим изменения с сформированным сообщением
-        git commit -m "$commit_message"
+        if ! git commit -m "$commit_message" >> "$error_log" 2>&1; then
+            echo "Failed to commit changes. See $error_log for details." >> "$error_log" 2>&1
+            exit 1
+        fi
 
         # Генерируем случайную задержку от 5 до 15 секунд
         random_sleep=$(shuf -i 5-15 -n 1)
-        sleep $random_sleep
+        sleep "$random_sleep"
     done
 
     # Пушим все изменения в удаленный репозиторий
-    git push origin main
+    if ! git push origin main >> "$error_log" 2>&1; then
+        echo "Failed to push changes to remote repository. See $error_log for details." >> "$error_log" 2>&1
+        exit 1
+    fi
 }
 
 # Генерируем случайное количество коммитов от 5 до 15
 random_commit_count=$(shuf -i 5-15 -n 1)
 
 # Добавляем информацию о запуске скрипта и количестве коммитов в лог файл
-echo "$run_count итерация - $random_commit_count коммитов" > $log_file
+echo "$run_count итерация - $random_commit_count коммитов" >> "$run_log"
+
+# Добавляем лог файлы в индекс Git
+git add -f "$run_log" "$error_log" "$count_file"
 
 # Вызываем функцию perform_random_commits с случайным количеством коммитов
-perform_random_commits $random_commit_count
+perform_random_commits "$random_commit_count"
