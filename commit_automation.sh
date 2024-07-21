@@ -8,29 +8,33 @@ count_file="$logs_folder/run_count.txt"
 run_log="$logs_folder/run.log"
 error_log="$logs_folder/error.log"
 
+# Функция проверки наличия команды
+check_command() {
+    local cmd=$1
+    if ! command -v "$cmd" &> /dev/null; then
+        echo "$cmd is not installed or not in PATH. Aborting." >> "$error_log" 2>&1
+        exit 1
+    fi
+}
+
+# Функция для создания файла, если он не существует
+create_file_if_not_exists() {
+    local file=$1
+    if [ ! -f "$file" ]; then
+        touch "$file" || { echo "Failed to create $file. Aborting." >> "$error_log" 2>&1; exit 1; }
+    fi
+}
+
 # Проверка наличия git
-if ! command -v git &> /dev/null; then
-    echo "Git is not installed or not in PATH. Aborting." >> "$error_log" 2>&1
-    exit 1
-fi
+check_command git
 
 # Создаем папку для лог-файлов, если ее нет
 mkdir -p "$logs_folder"
 
-# Проверяем, существует ли файл для отслеживания количества запусков
-if [ ! -f "$count_file" ]; then
-    echo 0 > "$count_file" || { echo "Failed to create $count_file. Aborting." >> "$error_log" 2>&1; exit 1; }
-fi
-
-# Проверяем, существует ли файл для лога запусков
-if [ ! -f "$run_log" ]; then
-    touch "$run_log" || { echo "Failed to create $run_log. Aborting." >> "$error_log" 2>&1; exit 1; }
-fi
-
-# Проверяем, существует ли файл для лога ошибок
-if [ ! -f "$error_log" ]; then
-    touch "$error_log" || { echo "Failed to create $error_log. Aborting." >> "$run_log" 2>&1; exit 1; }
-fi
+# Проверяем и создаем файлы
+create_file_if_not_exists "$count_file"
+create_file_if_not_exists "$run_log"
+create_file_if_not_exists "$error_log"
 
 # Читаем текущее количество запусков
 run_count=$(cat "$count_file")
@@ -41,11 +45,14 @@ run_count=$((run_count + 1))
 # Обновляем количество запусков в файле
 echo "$run_count" > "$count_file"
 
+# Генерируем случайное количество коммитов от 5 до 15
+random_commit_count=$(shuf -i 5-15 -n 1)
+
 # Функция для генерации случайных изменений и коммитов
 perform_random_commits() {
-    local num_commits=$1  # количество коммитов, которые нужно выполнить
+    local num_commits=$1
 
-    # Создаем массив с именами файлов для каждого языка
+    # Массивы файлов и кода
     python_files=(
         "greetings_utils.py"
         "financial_calculations.py"
@@ -98,7 +105,7 @@ perform_random_commits() {
         "backup.sh"
     )
 
-    # Создаем массив со случайными строками кода для каждого языка
+    # Массивы строк кода
     python_codes=(
         "def greet(name):\n    return f'Hello, {name}!'"
         "def add(a, b):\n    return a + b"
@@ -150,111 +157,43 @@ perform_random_commits() {
         "count_words() { echo \"\$1\" | wc -w; }"
     )
 
-    # Выбираем случайное имя файла и код
+    # Добавляем информацию о запуске скрипта и количестве коммитов в лог файл
+    echo "$run_count итерация - $num_commits коммитов" >> "$run_log"
+    
     for (( i=1; i<=$num_commits; i++ ))
     do
-        # Выбираем случайный язык
         language=$((RANDOM % 4))
-
-        # Определяем массив файлов и код в зависимости от выбранного языка
         case $language in
-            0) 
-                files=("${python_files[@]}")
-                codes=("${python_codes[@]}")
-                file_extension=".py"
-                language_name="Python"
-                folder_name="Python"
-                ;;
-            1) 
-                files=("${kotlin_files[@]}")
-                codes=("${kotlin_codes[@]}")
-                file_extension=".kt"
-                language_name="Kotlin"
-                folder_name="Kotlin"
-                ;;
-            2) 
-                files=("${dotnet_files[@]}")
-                codes=("${dotnet_codes[@]}")
-                file_extension=".cs"
-                language_name=".NET"
-                folder_name="DotNet"
-                ;;
-            3) 
-                files=("${shell_files[@]}")
-                codes=("${shell_codes[@]}")
-                file_extension=".sh"
-                language_name="Shell"
-                folder_name="Shell"
-                ;;
+            0) files=("${python_files[@]}"); codes=("${python_codes[@]}"); file_extension=".py"; language_name="Python"; folder_name="Python";;
+            1) files=("${kotlin_files[@]}"); codes=("${kotlin_codes[@]}"); file_extension=".kt"; language_name="Kotlin"; folder_name="Kotlin";;
+            2) files=("${dotnet_files[@]}"); codes=("${dotnet_codes[@]}"); file_extension=".cs"; language_name=".NET"; folder_name="DotNet";;
+            3) files=("${shell_files[@]}"); codes=("${shell_codes[@]}"); file_extension=".sh"; language_name="Shell"; folder_name="Shell";;
         esac
 
-        # Создаем папку для языка, если ее нет
         mkdir -p "$folder_name"
-
-        # Выбираем случайное имя файла и строку кода
         random_file="${files[$RANDOM % ${#files[@]}]}"
         random_code="${codes[$RANDOM % ${#codes[@]}]}"
-
-        # Добавляем расширение файла, если его нет
-        if [[ ! "$random_file" == *"$file_extension" ]]; then
-            random_file+="$file_extension"
-        fi
-
-        # Полный путь к файлу
+        [[ "$random_file" != *"$file_extension" ]] && random_file+="$file_extension"
         full_path="$folder_name/$random_file"
-
-        # Если файл не существует, создаем его
-        if [ ! -f "$full_path" ]; then
-            touch "$full_path" || { echo "Failed to create $full_path. Aborting." >> "$error_log" 2>&1; exit 1; }
-        fi
-
-        # Извлекаем имя функции из случайной строки кода
+        [ ! -f "$full_path" ] && touch "$full_path" || { echo "Failed to create $full_path. Aborting." >> "$error_log" 2>&1; exit 1; }
         function_name=$(echo "$random_code" | grep -oP 'def \K[a-zA-Z0-9_]+|fun \K[a-zA-Z0-9_]+|public static \K[a-zA-Z0-9_]+|function \K[a-zA-Z0-9_]+')
-
-        # Формируем сообщение для коммита с названием языка
         commit_message="- feat ($language_name) : $function_name"
-
-        # Выводим сообщение о выполнении коммита
         echo "Performing commit $i in $language_name..."
-
-        # Добавляем случайную строку кода в конец файла
         echo -e "$random_code\n" >> "$full_path"
-
-        # Добавляем изменения в индекс Git
-        if ! git add "$full_path" >> "$error_log" 2>&1; then
-            echo "Failed to add $full_path to git index. See $error_log for details." >> "$error_log" 2>&1
-            exit 1
-        fi
-
-        # Коммитим изменения с сформированным сообщением
-        if ! git commit -m "$commit_message" >> "$error_log" 2>&1; then
-            echo "Failed to commit changes. See $error_log for details." >> "$error_log" 2>&1
-            exit 1
-        fi
-
-        # Генерируем случайную задержку от 5 до 15 секунд
-        random_sleep=$(shuf -i 5-15 -n 1)
-        sleep "$random_sleep"
-
-        # Логируем выполненный коммит
         echo "Commit $i: $commit_message" >> "$run_log"
+        
+        git add "$full_path" >> "$error_log" 2>&1 || { echo "Failed to add $full_path to git index. See $error_log for details." >> "$error_log" 2>&1; exit 1; }
+        git add -f "$run_log" "$error_log" "$count_file" >> "$error_log" 2>&1 || { echo "Failed to add log files to git index. See $error_log for details." >> "$error_log" 2>&1; exit 1; }
+        git commit -m "$commit_message" >> "$error_log" 2>&1 || { echo "Failed to commit changes. See $error_log for details." >> "$error_log" 2>&1; exit 1; }
+        
+        # Генерируем случайное число от 10 до 60 и ждем указанное количество секунд
+        sleep_time=$(shuf -i 10-60 -n 1)
+        sleep "$sleep_time"
+        
     done
-
-    # Пушим все изменения в удаленный репозиторий
-    if ! git push origin main >> "$error_log" 2>&1; then
-        echo "Failed to push changes to remote repository. See $error_log for details." >> "$error_log" 2>&1
-        exit 1
-    fi
+    
+    git push origin main >> "$error_log" 2>&1 || { echo "Failed to push changes to remote repository. See $error_log for details." >> "$error_log" 2>&1; exit 1; }
 }
-
-# Генерируем случайное количество коммитов от 5 до 15
-random_commit_count=$(shuf -i 5-15 -n 1)
-
-# Добавляем информацию о запуске скрипта и количестве коммитов в лог файл
-echo "$run_count итерация - $random_commit_count коммитов" >> "$run_log"
-
-# Добавляем лог файлы в индекс Git
-git add -f "$run_log" "$error_log" "$count_file"
 
 # Вызываем функцию perform_random_commits с случайным количеством коммитов
 perform_random_commits "$random_commit_count"
