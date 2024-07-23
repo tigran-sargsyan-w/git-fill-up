@@ -13,7 +13,7 @@ check_command() {
     local cmd=$1
     if ! command -v "$cmd" &> /dev/null; then
         echo "$cmd is not installed or not in PATH. Aborting." >> "$error_log" 2>&1
-        exit 1
+        exit 16
     fi
 }
 
@@ -21,7 +21,7 @@ check_command() {
 create_file_if_not_exists() {
     local file=$1
     if [ ! -f "$file" ]; then
-        touch "$file" || { echo "Failed to create $file. Aborting." >> "$error_log" 2>&1; exit 1; }
+        touch "$file" || { echo "Failed to create $file. Aborting." >> "$error_log" 2>&1; exit 24; }
     fi
 }
 
@@ -162,7 +162,7 @@ perform_random_commits() {
     
     for (( i=1; i<=$num_commits; i++ ))
     do
-        language=$((RANDOM % 4))
+        language=$(shuf -i 0-3 -n 1)
         case $language in
             0) files=("${python_files[@]}"); codes=("${python_codes[@]}"); file_extension=".py"; language_name="Python"; folder_name="Python";;
             1) files=("${kotlin_files[@]}"); codes=("${kotlin_codes[@]}"); file_extension=".kt"; language_name="Kotlin"; folder_name="Kotlin";;
@@ -175,16 +175,22 @@ perform_random_commits() {
         random_code="${codes[$RANDOM % ${#codes[@]}]}"
         [[ "$random_file" != *"$file_extension" ]] && random_file+="$file_extension"
         full_path="$folder_name/$random_file"
-        [ ! -f "$full_path" ] && touch "$full_path" || { echo "Failed to create $full_path. Aborting." >> "$error_log" 2>&1; exit 1; }
+
+        if [ -f "$full_path" ]; then
+            echo -e "\t$full_path already exists. Skipping creation." >> "$run_log"
+        else
+            touch "$full_path" || { echo "Failed to create $full_path. Aborting." >> "$error_log" 2>&1; exit 182; }
+        fi
+
         function_name=$(echo "$random_code" | grep -oP 'def \K[a-zA-Z0-9_]+|fun \K[a-zA-Z0-9_]+|public static \K[a-zA-Z0-9_]+|function \K[a-zA-Z0-9_]+')
         commit_message="- feat ($language_name) : $function_name"
         echo "Performing commit $i in $language_name..."
         echo -e "$random_code\n" >> "$full_path"
         echo "Commit $i: $commit_message" >> "$run_log"
         
-        git add "$full_path" >> "$error_log" 2>&1 || { echo "Failed to add $full_path to git index. See $error_log for details." >> "$error_log" 2>&1; exit 1; }
-        git add -f "$run_log" "$error_log" "$count_file" >> "$error_log" 2>&1 || { echo "Failed to add log files to git index. See $error_log for details." >> "$error_log" 2>&1; exit 1; }
-        git commit -m "$commit_message" >> "$error_log" 2>&1 || { echo "Failed to commit changes. See $error_log for details." >> "$error_log" 2>&1; exit 1; }
+        git add "$full_path" >> "$error_log" 2>&1 || { echo "Failed to add $full_path to git index. See $error_log for details." >> "$error_log" 2>&1; exit 191; }
+        git add -f "$run_log" "$error_log" "$count_file" >> "$error_log" 2>&1 || { echo "Failed to add log files to git index. See $error_log for details." >> "$error_log" 2>&1; exit 186; }
+        git commit -m "$commit_message" >> "$error_log" 2>&1 || { echo "Failed to commit changes. See $error_log for details." >> "$error_log" 2>&1; exit 193; }
         
         # Генерируем случайное число от 10 до 60 и ждем указанное количество секунд
         sleep_time=$(shuf -i 10-60 -n 1)
@@ -192,7 +198,7 @@ perform_random_commits() {
         
     done
     
-    git push origin main >> "$error_log" 2>&1 || { echo "Failed to push changes to remote repository. See $error_log for details." >> "$error_log" 2>&1; exit 1; }
+    git push origin main >> "$error_log" 2>&1 || { echo "Failed to push changes to remote repository. See $error_log for details." >> "$error_log" 2>&1; exit 201; }
 }
 
 # Вызываем функцию perform_random_commits с случайным количеством коммитов
